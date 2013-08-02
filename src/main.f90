@@ -318,18 +318,9 @@ program jolify
         do i= 1, size(charArray)
             read(11,'(a)',iostat=iostat) line
             if( iostat /= 0) exit
-!~             print*,trim(adjustl(line))
             charArray(i) = trim(adjustl(line))
         end do
         close(11)
     end subroutine
-
-!~     
-!~     subroutine removeTrailingLines
-!~         implicit none
-!~         
-!~     end subroutine
-!~ 
-!~     subroutine
 
 end program
