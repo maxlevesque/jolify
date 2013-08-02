@@ -58,9 +58,6 @@ program jolify
                 jp = j+len(ch)-1
                 if( (charArray(i)(j:jp)==ch) .and. (j>1) .and. (charArray(i)(j-1:j-1)/=" ") .and. &
                     (charArray(i)(j-1:j-1)/='"') )then
-!~                     do k = lastchar(charArray(i))+1, j, -1
-!~                         charArray(i)(k:k) = charArray(i)(k-1:k-1)
-!~                     end do
                     call moveToTheRight(charArray(i),j,1)
                     charArray(i)(j:j) = " "
                 end if
@@ -78,9 +75,7 @@ program jolify
                 jp = j+len(ch)-1
                 if( (charArray(i)(j:jp)==ch) .and. (j>1) .and. (charArray(i)(jp+1:jp+1)/=" ") .and. &
                     (charArray(i)(jp+1:jp+1)/='"')) then
-                    do k = lastchar(charArray(i))+1, jp+2, -1
-                        charArray(i)(k:k) = charArray(i)(k-1:k-1)
-                    end do
+                    call moveToTheRight(charArray(i),jp+1,1)
                     charArray(i)(jp+1:jp+1) = " "
                 end if
             end do
