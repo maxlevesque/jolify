@@ -17,19 +17,43 @@ program jolify
     call insertSpaceBeforeAndAfter("<=")
     call insertSpaceBeforeAndAfter(">")
     call insertSpaceBeforeAndAfter("<")
+!~     call insertLineAfter("program ",1) ! insert 1 line after "program"
+!~     call insertLineAfter("Program ",1)
+!~     call insertLineAfter("PROGRAM ",1)
+!~     call insertLineAfter("if ",1)
+!~     call insertLineAfter("if( ",1)
+!~     call removeDoubleBlankLines
     call removeDoubleSpaces
     call indent
-    call verifyMaxLength(132)
+!~     call verifyMaxLength(132)
 
+    call print2StandardOutput
 
-    block
-    integer :: i
-    do i= 1, size(charArray)
-        print*,trim(charArray(i))
-    end do
-    end block
-    
     contains
+    
+    subroutine insertLineAfter(ch,Ninserted)
+        integer, intent(in) :: Ninserted
+        character(len=*), intent(in) :: ch
+        integer :: i, lb, ub, j
+        character(len=len(charArray(1))) :: line
+        lb = lbound(charArray,1)
+        ub = ubound(charArray,1)
+        do i= lb, ub
+            line = charArray(i)
+            do j= firstchar(line), lastchar(line)-len(ch)+1
+                if( line(j:j+len(ch)-1) == ch ) then
+                    call insertLine(i+1,Ninserted)
+                end if
+            end do
+        end do
+    end subroutine
+
+    subroutine print2StandardOutput
+        integer :: i
+        do i = lbound(charArray,1), ubound(charArray,1)
+            print*, trim(charArray(i))
+        end do
+    end subroutine
 
     subroutine insertSpaceBeforeAndAfter(ch)
         character(len=*), intent(in) :: ch
@@ -48,9 +72,74 @@ program jolify
         end do
     end subroutine
 
+    subroutine removeLine(pos)
+        integer, intent(in) :: pos
+        integer :: lb, ub, i
+        character(len=len(charArray(1))), allocatable, dimension(:) :: tmp
+        lb = lbound(charArray,1)
+        ub = ubound(charArray,1)
+        if( pos < lb ) then
+            print*,"Cannot remove line lower than lower bound of charArray:",pos
+            stop
+        else if ( pos> ub) then
+            print*,"Cannot remove line uppuer than uppuer bound of charArray:", pos
+            stop
+        end if
+        allocate(tmp(lb:ub))
+        tmp = charArray
+        deallocate(charArray)
+        if( ub-1 <= lb ) then
+            print*, "charArray is too short to remove line", pos
+            stop
+        end if
+        allocate(charArray(lb:ub-1))
+        do concurrent( i= lb:ub-1 )
+            if( i< pos) then
+                charArray(i) = tmp(i)
+            else if ( i == pos) then
+                ! do nothing
+            else if (i > pos) then
+                charArray(i) = tmp(i+1)
+            end if
+        end do
+        deallocate(tmp)
+    end subroutine
+
+    subroutine insertLine(fromPosition,byNlines) ! fromPosition is included in the movement
+        integer, intent(in) :: fromPosition, byNlines
+        integer :: i
+        if( fromPosition < lbound(charArray,1) ) then
+            print*, "fromPosition is lower than the lower bound of charArray:", fromPosition
+            stop
+        else if( fromPosition > ubound(charArray,1) ) then
+            print*, "fromPosition is higher than the upper bound of charArray:", fromPosition
+        end if
+        call addLinesToArray(byNlines)
+        do i = ubound(charArray,1), fromPosition+byNLines, -1
+            charArray(i) = charArray(i-byNLines)
+        end do
+    end subroutine
+    
+    subroutine addLinesToArray(numberOfAddedLines)
+        integer, intent(in) :: numberOfAddedLines
+        character(len=len(charArray(1))), allocatable, dimension(:) :: tmpcharArray
+        integer :: j, lbca, ubca
+        lbca = lbound(charArray,1)
+        ubca = ubound(charArray,1)
+        allocate(tmpcharArray(lbca:ubca))
+        tmpcharArray = charArray
+        deallocate( charArray )
+        allocate( charArray(lbca:ubca+numberOfAddedLines) )
+        charArray(lbca:ubca) = tmpcharArray
+        do j= 1, len(charArray(1)) ! blank new lines
+            charArray(ubca+1:ubca+numberOfAddedLines)(j:j) = " "
+        end do
+        deallocate(tmpcharArray)
+    end subroutine
+
     subroutine insertSpaceBefore(ch)
         character(len=*), intent(in) :: ch
-        integer :: i, imin, imax, j, k, jp
+        integer :: i, imin, imax, j, jp
         imin = lbound(charArray,1)
         imax = ubound(charArray,1)
         do i = imin, imax
@@ -67,7 +156,7 @@ program jolify
 
     subroutine insertSpaceAfter(ch)
         character(len=*), intent(in) :: ch
-        integer :: i, imin, imax, j, k, jp
+        integer :: i, imin, imax, j, jp
         imin = lbound(charArray,1)
         imax = ubound(charArray,1)
         do i = imin, imax
@@ -117,7 +206,7 @@ program jolify
 
     subroutine levelEachLine(level)
         integer, dimension(size(charArray)), intent(out) :: level
-        integer :: fc, lc, fi, i, j
+        integer :: fc, lc, fi, i
         character(len=len(charArray)) :: line
         level = 0
         fi= size(charArray)
@@ -153,6 +242,9 @@ program jolify
                 (line(fc:fc+4) == "block") .or. &
                 (line(fc:fc+4) == "BLOCK") .or. &
                 (line(fc:fc+4) == "Block") .or. &
+                (line(fc:fc+4) == "where") .or. &
+                (line(fc:fc+4) == "WHERE") .or. &
+                (line(fc:fc+4) == "Where") .or. &
                 (line(fc:fc+15) == "integer function") .or. &
                 (line(fc:fc+15) == "INTEGER FUNCTION") .or. &
                 (line(fc:fc+15) == "Integer Function") .or. &
@@ -179,18 +271,13 @@ program jolify
                         (line(fc:fc+7) == "Contains") ) then
                 level(i) = level(i)-1
             end if
-            ! pb with functions
-!~             if( lc - fc > len("function") ) then
-!~                 do j= fc, lc-len("function")
-!~                     if(  ( line(j:j+len("function")-1) == "function") .and. 
-!~                 end do
         end do
         if( level(1) /= 0 ) stop "indentation of first line should be 0"
 !~         if( level(fi) /= 0) stop "indentation of last line of file should be 0"
-!~         if( any(level < 0)) stop "no line should have a negative indent."
-        do i = 1, size(charArray)
-            print*,i,level(i)
-        end do
+        if( any(level < 0)) stop "no line should have a negative indent."
+!~         do i = 1, size(charArray) ! prints level of indention for each line
+!~             print*,i,level(i)
+!~         end do
     end subroutine
 
     subroutine removeDoubleSpaces
@@ -259,7 +346,7 @@ program jolify
             else if( status < 0 ) then
                 stop "Argument is truncated. length of character arg is too short. Modify the program"
             else
-                print*,"Now working on file ", trim(adjustl(arg))
+!~                 print*,"Now working on file ", trim(adjustl(arg))
             end if
         end if    
     end subroutine
@@ -274,7 +361,7 @@ program jolify
     subroutine sizeCharArray(file)
         character(len=*), intent(in) :: file
         allocate( charArray( countLines(file) ) )
-        print*,"number of lines in file is", countLines(file)
+!~         print*,"number of lines in file is", countLines(file)
     end subroutine
 
     integer function countLines (file)
